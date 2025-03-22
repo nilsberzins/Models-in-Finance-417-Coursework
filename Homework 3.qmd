@@ -1,0 +1,591 @@
+---
+title: "Homework 3"
+format: pdf
+editor: visual
+---
+
+## Problem 1 - SET SEED 1010
+
+```{r HW1_files}
+#| warning: false
+library(tidyverse)
+folder_path <- paste(file.path(getwd(), "HW 1 Files"))
+
+all_files <- list.files(folder_path)
+
+filtered_files <- all_files[!grepl("-", all_files)]
+filtered_files <- all_files[-1]
+
+filtered_files
+
+datasets <- lapply(filtered_files, function(x) {
+  curr_data <- read.table(paste0(folder_path, "/", x), sep=",", h = 1)
+  curr_data$Date <- as.Date(curr_data$Date, "%m/%d/%Y")
+  curr_data <- curr_data[order(curr_data$Date),]
+  curr_data$Close.Last <- as.numeric(gsub("\\$", "", curr_data$Close.Last))
+  price <- curr_data$Close.Last
+  names(price) <- curr_data$Date
+  return(price)
+})
+
+file_names <- gsub("\\.csv$", "", filtered_files)
+names(datasets) <- file_names
+```
+
+```{r HW2_files}
+
+folder_path <- paste(file.path(getwd(), "HW 2 Files"))
+
+all_files <- list.files(folder_path)
+
+filtered_files <- all_files[!grepl("-", all_files)]
+filtered_files <- all_files[-1]
+
+filtered_files
+
+datasets2 <- lapply(filtered_files, function(x) {
+  curr_data <- read.table(paste0(folder_path, "/", x), sep=",", h = 1)
+  curr_data$Date <- as.Date(curr_data$Date, "%m/%d/%Y")
+  curr_data <- curr_data[order(curr_data$Date),]
+  curr_data$Close.Last <- as.numeric(gsub("\\$", "", curr_data$Close.Last))
+  price <- curr_data$Close.Last
+  names(price) <- curr_data$Date
+  return(price)
+})
+
+file_names <- gsub("\\.csv$", "", filtered_files)
+names(datasets2) <- file_names
+```
+
+#### HW 2 A/B Code:
+
+```{r}
+library(quadprog)
+library(pracma)
+```
+
+```{r Yearly_Returns_ACCURATE}
+#| warning: false
+
+# Compute daily returns correctly
+daily_ret <- lapply(datasets, function(x) {
+  return(diff(x) / head(x, -1))  # Compute daily percentage returns
+})
+
+# Compute yearly returns while keeping years in list format
+yearly_ret <- lapply(daily_ret, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+mutated_df <- df |>
+    mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+    group_by(Year) |>
+    summarize(AverageRet = mean(Ret, na.rm = TRUE), .groups = "drop") |>
+    filter(as.numeric(Year) >= 2020) |> 
+    mutate(AverageRet = ifelse(as.numeric(Year) <= 2024, AverageRet * 252, 
+                              AverageRet * 10))
+  
+  
+  
+  # Return named numeric vector (years as names)
+  return(setNames(mutated_df$AverageRet, mutated_df$Year))
+})
+
+```
+
+```{r Port_Yearly_Split}
+
+yearly_22 <- lapply(yearly_ret, function(x){
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+
+yearly_pres <- lapply(yearly_ret, function(x) {
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+```{r RF_Yearly_Split}
+# Load risk-free rate data
+risk_free <- read.table(paste(file.path(getwd(), "HW 1 Files/10-year-treasury-bond-rate-yield-chart.csv")), sep = ",", skip = 1, header = TRUE)
+risk_free <- na.omit(risk_free)
+
+# Convert date and extract year
+risk_free <- risk_free |>
+  mutate(Date = as.Date(date, format = "%m/%d/%y")) |>
+  mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+  select(Year, value)
+
+# Compute average risk-free rate per year instead of using last value
+rf_22 <- risk_free |>
+  filter(Year >= 2020 & Year <= 2022) |>
+  group_by(Year) |>
+  summarize(value = mean(value, na.rm = TRUE) / 100, .groups = "drop")  # Use mean instead of last
+
+rf_pres <- risk_free |>
+  filter(Year >= 2023) |>
+  group_by(Year) |>
+  summarize(value = mean(value, na.rm = TRUE) / 100, .groups = "drop")  # Use mean instead of last
+
+```
+
+```{r Setting_up_Data}
+df_22 <- as.matrix(as.data.frame(yearly_22) |>
+                     select(-c(QQQ, SPY, DIA)))
+df_pres <- as.matrix(as.data.frame(yearly_pres) |>
+                     select(-c(QQQ, SPY, DIA)))
+
+mean_22 <- colMeans(df_22)
+mean_pres <- colMeans(df_pres)
+
+cov_mat_22 <- cov(df_22)
+cov_mat_pres <- cov(df_pres)
+
+sd_22 <- sqrt(diag(cov_mat_22))
+sd_pres <- sqrt(diag(cov_mat_pres))
+```
+
+##### B) Portfolios for 2020-2022
+
+```{r}
+#| warning: false
+
+# Compute daily returns correctly
+daily_ret2 <- lapply(datasets2, function(x) {
+  return(diff(x) / head(x, -1))  # Compute daily percentage returns
+})
+
+# Compute yearly returns while keeping years in list format
+yearly_ret2 <- lapply(daily_ret2, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+  mutated_df <- df |>
+    mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+    group_by(Year) |>
+    summarize(AverageRet = mean(Ret, na.rm = TRUE), .groups = "drop") |>
+    filter(as.numeric(Year) >= 2020) |> 
+    mutate(AverageRet = ifelse(as.numeric(Year) <= 2024, AverageRet * 252, 
+                              AverageRet * 10))
+  
+  
+  
+  # Return named numeric vector (years as names)
+  return(setNames(mutated_df$AverageRet, mutated_df$Year))
+})
+
+yearly_ret_comb <- c(yearly_ret, yearly_ret2)
+
+```
+
+```{r}
+daily_ret_comb_unfil <- c(daily_ret, daily_ret2)
+
+daily_ret_comb22 <- lapply(daily_ret_comb_unfil, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+  mutated_df <- df |>
+    filter(Date >= as.Date("2020-01-01"),
+           Date < as.Date("2023-01-01"))
+  
+  return(setNames(mutated_df$Ret, mutated_df$Date))
+})
+
+daily_ret_comb_pres <- lapply(daily_ret_comb_unfil, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+  mutated_df <- df |>
+    filter(Date >= as.Date("2023-01-01"))
+  
+  return(setNames(mutated_df$Ret, mutated_df$Date))
+})
+```
+
+```{r}
+library(xts)
+weekly_ret_22 <- lapply(daily_ret_comb22, function(x) {
+  
+  daily_ret_xts <- xts(x, order.by = as.Date(names(x)))
+  
+  weekly_ret <- apply.weekly(daily_ret_xts, function(x) prod(1+x) - 1)
+  
+  weekly_ret_vec <- as.numeric(coredata(weekly_ret))
+  
+  weekly_date <- index(weekly_ret)
+  
+  return(setNames(weekly_ret_vec, weekly_date))
+})
+
+weekly_ret_pres <- lapply(daily_ret_comb_pres, function(x) {
+  daily_ret_xts <- xts(x, order.by = as.Date(names(x)))
+  
+  weekly_ret <- apply.weekly(daily_ret_xts, function(x) prod(1+x) - 1)
+  
+  weekly_ret_vec <- as.numeric(coredata(weekly_ret))
+  
+  weekly_date <- index(weekly_ret)
+  
+  return(setNames(weekly_ret_vec, weekly_date))
+})
+```
+
+```{r}
+yearly_22<- lapply(yearly_ret_comb, function(x){
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+
+yearly_pres <- lapply(yearly_ret_comb, function(x) {
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+```{r}
+df_22 <- as.matrix(as.data.frame(yearly_22) |>
+                     select(-c(QQQ, SPY, DIA)))
+df_pres <- as.matrix(as.data.frame(yearly_pres) |>
+                     select(-c(QQQ, SPY, DIA)))
+
+mean_22 <- colMeans(df_22)
+mean_pres <- colMeans(df_pres)
+
+cov_mat_22 <- cov(df_22)
+cov_mat_pres <- cov(df_pres)
+
+sd_22 <- sqrt(diag(cov_mat_22))
+sd_pres <- sqrt(diag(cov_mat_pres))
+```
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_22)), mean_22, 
+             diag(1, nrow = length(mean_22))) # set the constraints matrix
+muP = c(0.10)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights22 = matrix(0, nrow = length(muP), ncol = length(mean_22)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_22))) # constraint vector
+  epsilon = 1e-4
+  Dmat = 2 * (cov_mat_22 + epsilon * diag(length(mean_22)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_22)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights22[i,] = result$solution
+}
+
+weights22[weights22 < 1e-10] <- 0
+
+colnames(weights22) <- names(mean_22)
+
+df_temp <- as.data.frame(weights22)
+
+rownames(df_temp) <- muP
+
+df_temp
+```
+
+##### B) Portfolios for 2023-Present
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_pres)), mean_pres, 
+             diag(1, nrow = length(mean_pres))) # set the constraints matrix
+muP = c(0.10)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights_pres = matrix(0, nrow = length(muP), ncol = length(mean_pres)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_pres))) # constraint vector
+  epsilon = 1e-6
+  Dmat = 2 * (cov_mat_pres + epsilon * diag(length(mean_pres)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_pres)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights_pres[i,] = result$solution
+}
+
+weights_pres[weights_pres < 1e-10] <- 0
+
+colnames(weights_pres) <- names(mean_22)
+
+df_temp <- as.data.frame(weights_pres)
+
+rownames(df_temp) <- muP
+
+df_temp
+
+```
+
+### A/B)
+
+```{r}
+daily_ret_mat22 <- do.call(cbind, daily_ret_comb22)
+
+daily_ret_mat22 <- daily_ret_mat22[, !colnames(daily_ret_mat22) %in% c("SPY", "QQQ", "DIA")]
+
+port22 <- as.vector(daily_ret_mat22 %*% t(weights22))
+```
+
+```{r}
+daily_ret_mat_pres <- do.call(cbind, daily_ret_comb_pres)
+
+daily_ret_mat_pres <- daily_ret_mat_pres[, !colnames(daily_ret_mat_pres) %in% c("SPY", "QQQ", "DIA")]
+
+port_pres <- as.vector(daily_ret_mat_pres %*% t(weights_pres))
+```
+
+```{r}
+library(bootstrap)
+set.seed("1010")
+
+quantile.calc = function(x, alpha = .01) {
+  Q = quantile(x, alpha)
+}
+
+bca_quantile_22 = bcanon(port22, 10000, quantile.calc)
+
+bca_quantile_pres = bcanon(port_pres, 10000, quantile.calc)
+
+bca_quantile_22$confpoints
+bca_quantile_pres$confpoints
+```
+
+**Value at Risk for the 2020-2022 daily portfolio at the .01 quantile:**
+
+95% Conf Interval: \$459,956,300 - \$846,138,500
+
+**Value at Risk for the 2023-present daily portfolio at the .01 quantile:**
+
+95% Conf Interval: \$303,939,600 - \$589,169,900
+
+It appears that the portfolio representative of 2023-present has a lower expected loss at the .01 quantile.
+
+### C)
+
+```{r}
+weekly_ret_mat22 <- do.call(cbind, weekly_ret_22)
+
+weekly_ret_mat22 <- weekly_ret_mat22[, !colnames(weekly_ret_mat22) %in% c("SPY", "QQQ", "DIA")]
+
+wk_port22 <- as.vector(weekly_ret_mat22 %*% t(weights22))
+```
+
+```{r}
+weekly_ret_mat_pres <- do.call(cbind, weekly_ret_pres)
+
+weekly_ret_mat_pres <- weekly_ret_mat_pres[, !colnames(weekly_ret_mat_pres) %in% c("SPY", "QQQ", "DIA")]
+
+wk_port_pres <- as.vector(weekly_ret_mat_pres %*% t(weights_pres))
+```
+
+```{r}
+set.seed("1010")
+
+quantile.calc = function(x, alpha = .05) {
+  Q = quantile(x, alpha)
+}
+
+bca_quantile_wk22 = bcanon(wk_port22, 10000, quantile.calc)
+
+bca_quantile_wkpres = bcanon(wk_port_pres, 10000, quantile.calc)
+
+bca_quantile_wk22$confpoints
+bca_quantile_wkpres$confpoints
+```
+
+**Value at Risk for the 2020-2022 weekly portfolio at the .01 quantile:**
+
+95% Conf Interval: \$805,118,800 - \$1,706,570,300
+
+**Value at Risk for the 2023-present weekly portfolio at the .01 quantile:**
+
+95% Conf Interval: \$589,693,000 - \$1,294,325,000
+
+As more trading days are added to the time horizon, we can obviously see that the value at risk increases dramatically from a one day time horizon to a one week time horizon.
+
+## Problem 2
+
+### A)
+
+```{r}
+#| warning: false 
+library(extraDistr)
+library(MASS)
+
+set.seed("1010")
+
+S = 10000000000
+alpha = 0.01
+
+fit.t = fitdistr(port22, "t")
+
+param = as.numeric(fit.t$estimate)
+
+VaR = -S*(param[1]+ param[2] * qt(alpha, param[3]))
+
+qqplot (qlst(ppoints(port22), df = param[3], param[1], param[2]), port22, xlab = "Q-Q Plot for t distribution ")
+
+```
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+fit.t = fitdistr(port_pres, "t")
+
+param = as.numeric(fit.t$estimate)
+
+VaR = -S*(param[1]+ param[2] * qt(alpha, param[3]))
+
+qqplot (qlst(ppoints(port22), df = param[3], param[1], param[2]), port22, xlab = "Q-Q Plot for t distribution ")
+```
+
+```{r}
+#| warning: false 
+
+library (fitHeavyTail)
+set.seed("1010")
+
+B = 10000
+VaR_boot_results = array()
+for (repl in 1:B) {
+    indices = sample(1:length(port22), length(port22), replace = TRUE)
+    returns_bootsamples = port22[indices]
+    params_multt_boot = fit_mvt(returns_bootsamples)
+    mu_p_boot = params_multt_boot$mu
+    sigma_p_boot = sqrt(params_multt_boot$cov)
+    VaR_boot = -S * (mu_p_boot + sigma_p_boot * qt(alpha, params_multt_boot$nu))
+    VaR_boot_results = cbind(VaR_boot_results, VaR_boot)
+}
+VaR_boot_results = VaR_boot_results[2:B]
+
+cbind(quantile(VaR_boot_results, 0.025), quantile(VaR_boot_results, 0.975))
+```
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+VaR_boot_results = array()
+for (repl in 1:B) {
+    indices = sample(1:length(port_pres), length(port_pres), replace = TRUE)
+    returns_bootsamples = port_pres[indices]
+    params_multt_boot = fit_mvt(returns_bootsamples)
+    mu_p_boot = params_multt_boot$mu
+    sigma_p_boot = sqrt(params_multt_boot$cov)
+    VaR_boot = -S * (mu_p_boot + sigma_p_boot * qt(alpha, params_multt_boot$nu))
+    VaR_boot_results = cbind(VaR_boot_results, VaR_boot)
+}
+VaR_boot_results = VaR_boot_results[2:B]
+
+cbind(quantile(VaR_boot_results, 0.025), quantile(VaR_boot_results, 0.975))
+```
+
+**Value at Risk for the 2020-2022 daily portfolio at the .01 quantile:**
+
+95% Conf Interval: \$708,496,946 - \$1,141,422,285
+
+**Value at Risk for the 2023-present daily portfolio at the .01 quantile:**
+
+95% Conf Interval: \$355,084,483 - \$509,034,375
+
+As seen above, tt appears that the portfolio representative of 2023-present has a far lower expected loss at the .01 quantile.
+
+### B)
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+fit.t = fitdistr(wk_port22, "t")
+
+param = as.numeric(fit.t$estimate)
+
+VaR = -S*(param[1]+ param[2] * qt(alpha, param[3]))
+
+qqplot (qlst(ppoints(port22), df = param[3], param[1], param[2]), port22, xlab = "Q-Q Plot for t distribution ")
+```
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+fit.t = fitdistr(wk_port_pres, "t")
+
+param = as.numeric(fit.t$estimate)
+
+VaR = -S*(param[1]+ param[2] * qt(alpha, param[3]))
+
+qqplot (qlst(ppoints(port22), df = param[3], param[1], param[2]), port22, xlab = "Q-Q Plot for t distribution ")
+```
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+B = 10000
+VaR_boot_results = array()
+for (repl in 1:B) {
+    indices = sample(1:length(wk_port22), length(wk_port22), replace = TRUE)
+    returns_bootsamples = wk_port22[indices]
+    params_multt_boot = fit_mvt(returns_bootsamples)
+    mu_p_boot = params_multt_boot$mu
+    sigma_p_boot = sqrt(params_multt_boot$cov)
+    VaR_boot = -S * (mu_p_boot + sigma_p_boot * qt(alpha, params_multt_boot$nu))
+    VaR_boot_results = cbind(VaR_boot_results, VaR_boot)
+}
+VaR_boot_results = VaR_boot_results[2:B]
+
+cbind(quantile(VaR_boot_results, 0.025), quantile(VaR_boot_results, 0.975))
+```
+
+```{r}
+#| warning: false 
+
+set.seed("1010")
+
+B = 10000
+VaR_boot_results = array()
+for (repl in 1:B) {
+    indices = sample(1:length(wk_port_pres), length(wk_port_pres), replace = TRUE)
+    returns_bootsamples = wk_port_pres[indices]
+    params_multt_boot = fit_mvt(returns_bootsamples)
+    mu_p_boot = params_multt_boot$mu
+    sigma_p_boot = sqrt(params_multt_boot$cov)
+    VaR_boot = -S * (mu_p_boot + sigma_p_boot * qt(alpha, params_multt_boot$nu))
+    VaR_boot_results = cbind(VaR_boot_results, VaR_boot)
+}
+VaR_boot_results = VaR_boot_results[2:B]
+
+cbind(quantile(VaR_boot_results, 0.025), quantile(VaR_boot_results, 0.975))
+```
+
+**Value at Risk for the 2020-2022 weekly portfolio at the .01 quantile:**
+
+95% Conf Interval: \$984,535,559 - \$2,175,508,464
+
+**Value at Risk for the 2023-present weekly portfolio at the .01 quantile:**
+
+95% Conf Interval: \$718,175,333 - \$1,328,311,778
+
+Again as seen above, as more trading days are added to the time horizon, we can obviously see that the value at risk increases dramatically from a one day time horizon to a one week time horizon.
