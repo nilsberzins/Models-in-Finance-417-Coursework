@@ -1,0 +1,1532 @@
+---
+title: "Homework 1"
+author: "Nils Berzins"
+execute:
+  code-fold: true
+format: pdf
+editor: visual
+---
+
+## Getting Data
+
+```{r importing-files}
+library(tidyverse)
+folder_path <- paste(file.path(getwd(), "HW 1 Files"))
+
+all_files <- list.files(folder_path)
+
+filtered_files <- all_files[!grepl("-", all_files)]
+filtered_files <- all_files[-1]
+
+filtered_files
+
+datasets <- lapply(filtered_files, function(x) {
+  curr_data <- read.table(paste0(folder_path, "/", x), sep=",", h = 1)
+  curr_data$Date <- as.Date(curr_data$Date, "%m/%d/%Y")
+  curr_data <- curr_data[order(curr_data$Date),]
+  curr_data$Close.Last <- as.numeric(gsub("\\$", "", curr_data$Close.Last))
+  price <- curr_data$Close.Last
+  names(price) <- curr_data$Date
+  return(price)
+})
+
+file_names <- gsub("\\.csv$", "", filtered_files)
+names(datasets) <- file_names
+```
+
+## Problem 1:
+
+### A.1)
+
+```{r Calculating-Daily-Monthly-Log-Returns}
+#Daily Log-Returns
+library(lubridate)
+daily_log_ret <- lapply(datasets, function(x){
+  return(diff(log(x), lag=1))
+})
+
+
+#Monthly Log-Returns
+monthly_log_ret <- lapply(datasets, function(x){
+  df <- data.frame(Date = as.Date(names(x)), Price = x)
+  mutated_df <- df |>
+    mutate(Month = format(floor_date(Date, "month"), "%y-%m")) |>
+    group_by(Month) |>
+    summarize(ClosingPrice = last(Price), .groups = "drop")
+  monthly_prices <- mutated_df$ClosingPrice
+  names(monthly_prices) <- mutated_df$Month
+  return(diff(log(monthly_prices), lag = 1))
+})
+```
+
+```{r Daily-Log-Returns-Periodized}
+#Daily Log-Returns 2015-2019
+daily_2015_2019 <- lapply(daily_log_ret, function(x){
+  date <- as.Date(names(x))
+  idx <- which(year(date) >= 2015 & year(date) <= 2019)
+  return(x[idx])
+})
+
+#Daily Log-Returns 2020-2022
+daily_2020_2022 <- lapply(daily_log_ret, function(x){
+  date <- as.Date(names(x))
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+#Daily Log-Returns 2023-Present
+daily_2023_pres <- lapply(daily_log_ret, function(x){
+  date <- as.Date(names(x))
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+```{r Monthly-Log-Returns-Periodized}
+#Monthly Log-Returns 2015-2019
+monthly_2015_2019 <- lapply(monthly_log_ret, function(x){
+  date <- as.Date(paste0("01-", names(x)), format = "%d-%y-%m")
+  idx <- which(year(date) >= 2015 & year(date) <= 2019)
+  return(x[idx])
+})
+
+#Monthly Log-Returns 2020-2022
+monthly_2020_2022 <- lapply(monthly_log_ret, function(x){
+  date <- as.Date(paste0("01-", names(x)), format = "%d-%y-%m")
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+#Monthly Log-Returns 2023-Present
+monthly_2023_pres <- lapply(monthly_log_ret, function(x){
+  date <- as.Date(paste0("01-", names(x)), format = "%d-%y-%m")
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+#### 2015-2019 Correlations (Daily)
+
+```{r ETFs-Daily-Correlations-2019}
+#SPY, DIA, QQQ
+etfs_daily <- daily_2015_2019[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_daily), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+#### 2015-2019 Correlations (Monthly)
+
+```{r ETFs-Monthly-Correlations-2019}
+etfs_monthly <- monthly_2015_2019[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_monthly), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+#### 2020-2022 Correlations (Daily)
+
+```{r ETFs-Daily-Correlations-2022}
+#SPY, DIA, QQQ
+etfs_daily <- daily_2020_2022[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_daily), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+#### 2020-2022 Correlations (Monthly)
+
+```{r ETFs-Monthly-Correlations-2022}
+etfs_monthly <- monthly_2020_2022[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_monthly), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+#### 2023-Present Correlations (Daily)
+
+```{r ETFs-Daily-Correlations-Pres}
+#SPY, DIA, QQQ
+etfs_daily <- daily_2023_pres[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_daily), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+#### 2023-Present Correlations (Monthly)
+
+```{r ETFs-Monthly-Correlations-Pres}
+etfs_monthly <- monthly_2023_pres[c("SPY", "DIA", "QQQ")]
+
+stock_combinations <- combn(names(etfs_monthly), m = 2, simplify = FALSE)
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) etfs_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+lapply(correlations, function(x) {
+  list(
+    stocks = x$stocks,
+    Correlation = x$cor_flat
+  )
+})
+```
+
+Aside from the 2023-Present DIA QQQ correlation (which was less positively correlated than typical for the other combinations in other time periods) all correlations appear to be strongly positively correlated.
+
+### A.2)
+
+#### 2015-2019 Correlations (Daily)
+
+```{r SPY-Daily-Correlations-2019}
+#Daily Correlations
+individual_daily <- daily_2015_2019[!(names(daily_2015_2019)) %in% c("DIA", "QQQ", "Moderna")]
+
+wout_spy <- setdiff(names(individual_daily), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2015-2019 Correlations (Monthly)
+
+```{r SPY-Monthly-Correlations-2019}
+#Montly Correlations
+individual_monthly <- monthly_2015_2019[!(names(monthly_2015_2019)) %in% c("DIA", "QQQ", "Moderna")]
+
+wout_spy <- setdiff(names(individual_monthly), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Daily)
+
+```{r SPY-Daily-Correlations-2022}
+#Daily Correlations
+individual_daily <- daily_2020_2022[!(names(daily_2020_2022)) %in% c("DIA", "QQQ")]
+
+wout_spy <- setdiff(names(individual_daily), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Monthly)
+
+```{r SPY-Monthly-Correlations-2022}
+#Montly Correlations
+individual_monthly <- monthly_2020_2022[!(names(monthly_2020_2022)) %in% c("DIA", "QQQ")]
+
+wout_spy <- setdiff(names(individual_monthly), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Daily)
+
+```{r SPY-Daily-Correlations-Present}
+#Daily Correlations
+individual_daily <- daily_2023_pres[!(names(daily_2023_pres)) %in% c("DIA", "QQQ")]
+
+wout_spy <- setdiff(names(individual_daily), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Monthly)
+
+```{r SPY-Monthly-Correlations-Present}
+#Monthly Correlations
+individual_monthly <- monthly_2023_pres[!(names(monthly_2023_pres)) %in% c("DIA", "QQQ")]
+
+wout_spy <- setdiff(names(individual_monthly), "SPY")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "SPY")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+On average, there appear to be two groupings of correlation to SPY... - Weakly Positivley correlated: Cicsco, Moderna, Starbux, and Tesla - Moderately Positively correlated: Amazon, Apple, Meta, Microsoft, and Netflix
+
+### A.3)
+
+#### 2015-2019 Correlations (Daily)
+
+```{r DIA-Daily-Correlations-2019}
+#Daily Correlations
+individual_daily <- daily_2015_2019[!(names(daily_2015_2019)) %in% c("SPY", "QQQ", "Moderna")]
+
+wout_spy <- setdiff(names(individual_daily), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2015-2019 Correlations (Monthly)
+
+```{r DIA-Monthly-Correlations-2019}
+#Montly Correlations
+individual_monthly <- monthly_2015_2019[!(names(monthly_2015_2019)) %in% c("SPY", "QQQ", "Moderna")]
+
+wout_spy <- setdiff(names(individual_monthly), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Daily)
+
+```{r DIA-Daily-Correlations-2022}
+#Daily Correlations
+individual_daily <- daily_2020_2022[!(names(daily_2020_2022)) %in% c("SPY", "QQQ")]
+
+wout_spy <- setdiff(names(individual_daily), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Monthly)
+
+```{r DIA-Monthly-Correlations-2022}
+#Montly Correlations
+individual_monthly <- monthly_2020_2022[!(names(monthly_2020_2022)) %in% c("SPY", "QQQ")]
+
+wout_spy <- setdiff(names(individual_monthly), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Daily)
+
+```{r DIA-Daily-Correlations-Present}
+#Daily Correlations
+individual_daily <- daily_2023_pres[!(names(daily_2023_pres)) %in% c("SPY", "QQQ")]
+
+wout_spy <- setdiff(names(individual_daily), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Monthly)
+
+```{r DIA-Monthly-Correlations-Present}
+#Monthly Correlations
+individual_monthly <- monthly_2023_pres[!(names(monthly_2023_pres)) %in% c("SPY", "QQQ")]
+
+wout_spy <- setdiff(names(individual_monthly), "DIA")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "DIA")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+On average, there appears to be a declining correlation between these nine stocks and the DIA ETF over time. Certain stocks such as Moderna and Telsa however have held weak to little correlation, relative to the overall group decline.
+
+### A.4)
+
+#### 2015-2019 Correlations (Daily)
+
+```{r QQQ-Daily-Correlations-2019}
+#Daily Correlations
+individual_daily <- daily_2015_2019[!(names(daily_2015_2019)) %in% c("SPY", "DIA", "Moderna")]
+
+wout_spy <- setdiff(names(individual_daily), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2015-2019 Correlations (Monthly)
+
+```{r QQQ-Monthly-Correlations-2019}
+#Montly Correlations
+individual_monthly <- monthly_2015_2019[!(names(monthly_2015_2019)) %in% c("SPY", "DIA", "Moderna")]
+
+wout_spy <- setdiff(names(individual_monthly), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Daily)
+
+```{r QQQ-Daily-Correlations-2022}
+#Daily Correlations
+individual_daily <- daily_2020_2022[!(names(daily_2020_2022)) %in% c("SPY", "DIA")]
+
+wout_spy <- setdiff(names(individual_daily), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2020-2022 Correlations (Monthly)
+
+```{r QQQ-Monthly-Correlations-2022}
+#Montly Correlations
+individual_monthly <- monthly_2020_2022[!(names(monthly_2020_2022)) %in% c("SPY", "DIA")]
+
+wout_spy <- setdiff(names(individual_monthly), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Daily)
+
+```{r QQQ-Daily-Correlations-Present}
+#Daily Correlations
+individual_daily <- daily_2023_pres[!(names(daily_2023_pres)) %in% c("SPY", "DIA")]
+
+wout_spy <- setdiff(names(individual_daily), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_daily[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+#### 2023-Present Correlations (Monthly)
+
+```{r QQQ-Monthly-Correlations-Present}
+#Monthly Correlations
+individual_monthly <- monthly_2023_pres[!(names(monthly_2023_pres)) %in% c("SPY", "DIA")]
+
+wout_spy <- setdiff(names(individual_monthly), "QQQ")
+
+stock_combinations <- sapply(wout_spy, function(x) list(stock_pair = c(x, "QQQ")))
+
+correlations <- lapply(stock_combinations, function(combo){
+
+  selected_ret <- sapply(combo, function(stock) individual_monthly[[stock]])
+  
+  cor_matrix <- cor(selected_ret)
+
+  cor_flat <- cor_matrix[upper.tri(cor_matrix)]
+
+  list(
+    stocks = combo,
+    cor_matrix = cor_matrix,
+    cor_flat = cor_flat
+  )
+
+})
+
+correlation_df <- do.call(rbind, lapply(correlations, function(x) {
+  data.frame(
+    stocks = paste(x$stocks, collapse = ", "),
+    Correlation = x$cor_flat
+  )
+}))
+
+correlation_df
+```
+
+As most notably seen in the 2023-Present correlation description, there appears to be a slow preference for tech stocks over food/service/pharmaceutical securities in the past decade. Generally, there appears to be a moderately positive correlation between the tech stocks and QQQ.
+
+### B.1)
+
+```{r Creating-Portfolio}
+stocks <- which(!names(datasets) %in% c("SPY", "DIA", "QQQ"))
+stocks_prices <- lapply(datasets[stocks], function(x){
+  if(length(x) > length(datasets$Moderna)) {
+    return(x[names(datasets$Moderna)])
+  }else {
+    return(x)
+  }
+})
+
+portfolio_prices <- Reduce("+", stocks_prices) / 9
+portfolio_log_return <- diff(log(portfolio_prices), lag = 1)
+```
+
+```{r ETF-List_Plus-Period-Returns}
+etf_log_returns <- list(
+  SPY = diff(log(datasets$SPY)),
+  DIA = diff(log(datasets$DIA)),
+  QQQ = diff(log(datasets$QQQ))
+)
+
+periods <- list(
+  "2015-2019" = c(2015, 2019),
+  "2020-2022" = c(2020, 2022),
+  "2023-present" = c(2023, Inf)
+)
+
+filter_by_year <- function(log_returns, years) {
+  date <- as.Date(names(log_returns))
+  idx <- which(year(date) >= years[1] & year(date) <= years[2])
+  return(log_returns[idx])
+}
+
+date_series <- as.Date(names(portfolio_log_return))
+
+port_log_ret_periods <- lapply(periods, function(yr_range) {
+  filter_by_year(portfolio_log_return, yr_range)
+})
+
+etf_log_ret_periods <- lapply(etf_log_returns, function(etf) {
+  lapply(periods, function(yr_range) {
+    filter_by_year(etf, yr_range)
+  })
+})
+```
+
+```{r Computing-Daily-Return-Statistics}
+compute_stats <- function(log_returns) {
+  list(
+    mean = mean(log_returns, na.rm = TRUE),
+    sd = sd(log_returns, na.rm = TRUE)
+  )
+}
+
+portfolio_stats_daily <- lapply(port_log_ret_periods, compute_stats)
+
+etf_stats_daily <- lapply(etf_log_ret_periods, function(etf) {
+  lapply(etf, compute_stats)
+})
+```
+
+```{r Computing-Monthly-Return-Statistics}
+comp_monthly_returns <- function(daily_log_returns) {
+  date_series <- as.Date(names(daily_log_returns))
+  monthly_returns <- tapply(daily_log_returns, format(date_series, "%Y-%m"), sum, na.rm = TRUE)
+  return(monthly_returns)
+}
+
+port_monthly_ret <- lapply(port_log_ret_periods, function(ret) {
+  comp_monthly_returns(ret)
+})
+
+etf_monthly_ret <- lapply(etf_log_ret_periods, function(etf_data) {
+  lapply(etf_data, function(period_data) {
+      comp_monthly_returns(period_data)
+  })
+})
+```
+
+```{r Producing-Summary-Tables}
+format_stats <- function(stats_list) {
+  do.call(rbind, lapply(names(stats_list), function(period) {
+    data.frame(
+      Period = period, 
+      Mean = mean(stats_list[[period]]),
+      Volatility = sd(stats_list[[period]])
+    )
+  }))
+}
+
+portfolio_summary_daily <- format_stats(port_log_ret_periods)
+portfolio_summary_monthly <- format_stats(port_monthly_ret)
+
+etf_summary_daily <- lapply(etf_log_ret_periods, format_stats)
+etf_summary_monthly <- lapply(etf_monthly_ret, format_stats)
+
+portfolio_summary_daily
+
+portfolio_summary_monthly
+
+print(etf_summary_daily)
+
+print(etf_summary_monthly)
+```
+
+Based on the monthly returns reports, it appears that it would be preferred to hold the portfolio over any of the etfs for all time periods. Where 2020-2022 was a difficult returns period regardless of which security you chose, the mean monthly returns for the portfolio were consistently .5% greater than the highest performing etf for that time period (with the acknowledgment that the volatility for the portfolio was also consistently higher than any of the etfs at any time period).
+
+### B.2)
+
+```{r Simulating-Sample-Paths-Daily-Port}
+library(ggplot2)
+calculate_price_intervals <- function(simulated.logprice, confidence_level = 0.95) {
+  # Convert from log prices back to actual prices
+  simulated.price <- transform(simulated.logprice, y = exp(y))
+  
+  # Calculate quantiles for each time point
+  intervals <- aggregate(y ~ x, data = simulated.price, function(y) {
+    alpha <- (1 - confidence_level) / 2
+    c(lower = quantile(y, alpha),
+      median = median(y, na.rm = TRUE),
+      upper = quantile(y, 1 - alpha), na.rm = TRUE)
+  })
+  
+  # Convert the matrix to separate columns
+  result <- data.frame(
+    time = intervals$x,
+    lower = sapply(intervals$y, `[`, 1),
+    median = sapply(intervals$y, `[`, 2),
+    upper = sapply(intervals$y, `[`, 3)
+  )
+  
+  return(result)
+}
+
+# Main loop through each asset
+set.seed(100) # set seed for reproducibility
+
+mean_vol_daily <- data.frame(
+  Name = c("Portfolio", "SPY", "DIA", "QQQ"),
+  Price = c(115.07258,  212.61, 321.86, 285.1),#etf prices: datasets[["ETF"]][["2019-12-31"]]
+  Log_Mean = c(0.001036252, 0.0003723624, 0.0003859757, 0.0005913629),
+  Log_Volatility = c(0.01463314, 0.008500673, 0.008533928, 0.01084187)
+)
+
+results_list <- list()
+
+# Loop through each row of mean_vol_daily
+for(row in 1:nrow(mean_vol_daily)) {
+  #Daily Check - 253 trading days each calendar year
+  t = 1275 #number of trading days from end of 2019 - end of dataset (Jan 10, 2025)
+  logprice0 = log(mean_vol_daily[row, ]$Price) 
+  logmean = mean_vol_daily[row, ]$Log_Mean
+  logvolatility = mean_vol_daily[row, ]$Log_Volatility
+  nsamples = 6 # number of sample paths to be simulated
+  
+  simulated.logprice = lapply(seq_len(nsamples), function(i) {
+    data.frame(
+      x = seq_len(t+1),
+      y = c(logprice0, 
+            logprice0 + cumsum(rnorm(t, logmean, logvolatility))), 
+      iteration = factor(i)  # Convert iteration to factor for better plotting
+    )
+  })
+  
+  simulated.logprice = do.call(rbind, simulated.logprice)
+  
+  # Calculate confidence intervals for this asset
+  intervals <- calculate_price_intervals(simulated.logprice)
+  
+  # Store results for this asset
+  results_list[[mean_vol_daily[row, ]$Name]] <- list(
+    simulated_paths = simulated.logprice,
+    confidence_intervals = intervals
+  )
+  
+  # Create the plot
+  p <- ggplot(simulated.logprice, aes(x, exp(y), colour = iteration, group = iteration)) +
+    geom_line() + 
+    geom_vline(xintercept = c(253, 506, 759, 1012, 1265)) +
+    labs(x = "Time - Trading Days",
+         y = "Price",
+         title = paste("Simulated Daily Sample Path -",
+                       mean_vol_daily[row,]$Name)) +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Use a color-blind friendly palette
+  
+  # Explicitly print the plot
+  print(p)
+  
+  # Optional: Add a small delay to ensure plots are displayed properly
+  Sys.sleep(0.5)
+}
+```
+
+```{r Simulating-Sample-Paths-Monthly-Port}
+set.seed (100) # set seed for reproducibility
+
+mean_vol_monthly <- data.frame(
+  Name = c("Portfolio", "SPY", "DIA", "QQQ"),
+  Price = c(115.07258,  212.61, 321.86, 285.1),#etf prices: datasets[["ETF"]][["2019-12-31"]]
+  Log_Mean = c(0.021283031, 0.007757550, 0.008041161, 0.012320061),
+  Log_Volatility = c(0.06490399, 0.03463348, 0.03504412, 0.04351907)
+)
+
+# Loop through each row of mean_vol_monthly
+for(row in 1:nrow(mean_vol_monthly)) {
+  #Daily Check - 253 trading days each calendar year
+  t = 61 #number of trading days from end of 2019 - end of dataset (Jan 10, 2025)
+  logprice0 = log(mean_vol_monthly[row, ]$Price) 
+  logmean = mean_vol_monthly[row, ]$Log_Mean
+  logvolatility = mean_vol_monthly[row, ]$Log_Volatility
+  nsamples = 6 # number of sample paths to be simulated
+  
+  simulated.logprice = lapply(seq_len(nsamples), function(i) {
+    data.frame(
+      x = seq_len(t+1),
+      y = c(logprice0, 
+            logprice0 + cumsum(rnorm(t, logmean, logvolatility))), 
+      iteration = factor(i)  # Convert iteration to factor for better plotting
+    )
+  })
+  
+  simulated.logprice = do.call(rbind, simulated.logprice)
+  
+  # Create the plot
+  p <- ggplot(simulated.logprice, aes(x, exp(y), colour = iteration, group = iteration)) +
+    geom_line() + 
+    geom_vline(xintercept = c(12, 24, 36, 48, 60)) +
+    labs(x = "Time - Months",
+         y = "Price",
+         title = paste("Simulated Monthly Sample Paths - ",
+                       mean_vol_monthly[row, ]$Name)) +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Use a color-blind friendly palette
+  
+  # Explicitly print the plot
+  print(p)
+  
+  # Optional: Add a small delay to ensure plots are displayed properly
+  Sys.sleep(0.5)
+}
+```
+
+*Note:* I was struggling with a bizarre issue where I could not produce the bounds of the confidence intervals as they were being returned NA. I'm stuck for now only being able to interpret whether the actual price fell within the simulated prices graphically.
+
+*Note 2:* Will be using the daily simulated graphs for determining whether the prices meet expectation.
+
+Portfolio: - 2020: 202.5855 *--\>* Does appear to fall within simulation range - 2022: 146.5122 *--\>* Does appear to fall within simulation range - Present: 324.03 *--\>* Does appear to fall within simulation range SPY: - 2020: 371.99 *--\>* Does not appear to fall within simulation range - 2022: 382.43 *--\>* Does not appear to fall within simulation range - Present: 580.49 *--\>* Does not appear to fall within simulation range DIA: - 2020: 304.13 *--\>* Does appear to fall within simulation range - 2022: 331.33 *--\>* Does not appear to fall within simulation range - Present: 419.33 *--\>* Does not appear to fall within simulation range QQQ: - 2020: 312.97 *--\>* Does appear to fall within simulation range - 2022: 266.28 *--\>* Does not appear to fall within simulation range - Present: 507.19 *--\>* Does appear to fall within simulation range
+
+### B.3)
+
+```{r Simulating-Sample-Paths-Daily-Port-2022}
+set.seed (100) # set seed for reproducibility
+
+mean_vol_daily <- data.frame(
+  Name = c("Portfolio", "SPY", "DIA", "QQQ"),
+  Price = c(146.5122,  382.43, 331.33, 266.28),#etf prices: datasets[["ETF"]][["2019-12-31"]]
+  Log_Mean = c(0.000319505, 0.0002280806, 0.0001987763, 0.0002977366),
+  Log_Volatility = c(0.02231592, 0.015868638, 0.015869143, 0.01876785)
+)
+
+# Loop through each row of mean_vol_daily
+for(row in 1:nrow(mean_vol_daily)) {
+  #Daily Check - 253 trading days each calendar year
+  t = 516 #number of trading days from end of 2022 - end of dataset (Jan 10, 2025)
+  logprice0 = log(mean_vol_daily[row, ]$Price) 
+  logmean = mean_vol_daily[row, ]$Log_Mean
+  logvolatility = mean_vol_daily[row, ]$Log_Volatility
+  nsamples = 6 # number of sample paths to be simulated
+  
+  simulated.logprice = lapply(seq_len(nsamples), function(i) {
+    data.frame(
+      x = seq_len(t+1),
+      y = c(logprice0, 
+            logprice0 + cumsum(rnorm(t, logmean, logvolatility))), 
+      iteration = factor(i)  # Convert iteration to factor for better plotting
+    )
+  })
+  
+  simulated.logprice = do.call(rbind, simulated.logprice)
+  
+  # Create the plot
+  p <- ggplot(simulated.logprice, aes(x, exp(y), colour = iteration, group = iteration)) +
+    geom_line() + 
+    geom_vline(xintercept = c(253, 506)) +
+    labs(x = "Time - Trading Days",
+         y = "Price",
+         title = paste("Simulated Sample Paths for Daily Portfolio -",
+                       mean_vol_daily[row,]$Name)) +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Use a color-blind friendly palette
+  
+  # Explicitly print the plot
+  print(p)
+  
+  # Optional: Add a small delay to ensure plots are displayed properly
+  Sys.sleep(0.5)
+}
+
+```
+
+```{r Simulating-Sample-Paths-Monthly-Port-2022}
+set.seed (100) # set seed for reproducibility
+
+mean_vol_daily <- data.frame(
+  Name = c("Portfolio", "SPY", "DIA", "QQQ"),
+  Price = c(146.5122,  382.43, 331.33, 266.28),#etf prices: datasets[["ETF"]][["2019-12-31"]]
+  Log_Mean = c(0.000319505, 0.0002280806, 0.0001987763, 0.0002977366),
+  Log_Volatility = c(0.02231592, 0.015868638, 0.015869143, 0.01876785)
+)
+
+# Loop through each row of mean_vol_monthly
+for(row in 1:nrow(mean_vol_monthly)) {
+  t = 25 #number of trading days from end of 2019 - end of dataset (Jan 10, 2025)
+  logprice0 = log(mean_vol_monthly[row, ]$Price) 
+  logmean = mean_vol_monthly[row, ]$Log_Mean
+  logvolatility = mean_vol_monthly[row, ]$Log_Volatility
+  nsamples = 6 # number of sample paths to be simulated
+  
+  simulated.logprice = lapply(seq_len(nsamples), function(i) {
+    data.frame(
+      x = seq_len(t+1),
+      y = c(logprice0, 
+            logprice0 + cumsum(rnorm(t, logmean, logvolatility))), 
+      iteration = factor(i)  # Convert iteration to factor for better plotting
+    )
+  })
+  
+  simulated.logprice = do.call(rbind, simulated.logprice)
+  
+  # Create the plot
+  p <- ggplot(simulated.logprice, aes(x, exp(y), colour = iteration, group = iteration)) +
+    geom_line() + 
+    geom_vline(xintercept = c(12, 24)) +
+    labs(x = "Time - Months",
+         y = "Price",
+         title = paste("Simulated Sample Paths for Monthly Portfolio - ",
+                       mean_vol_monthly[row, ]$Name)) +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Use a color-blind friendly palette
+  
+  # Explicitly print the plot
+  print(p)
+  
+  #Add a small delay to ensure plots are displayed properly
+  Sys.sleep(0.5)
+}
+```
+
+*Note:* I was struggling with a bizarre issue where I could not produce the bounds of the confidence intervals as they were being returned NA. I'm stuck for now only being able to interpret whether the actual price fell within the simulated prices graphically.
+
+*Note 2:* Will be using the daily simulated graphs for determining whether the prices meet expectation.
+
+Portfolio: - 2023: 228.4233 *--\>* Does not appear to fall within simulation range - Present: 324.03 *--\>* Does appear to fall within simulation range SPY: - 2023: 475.31 *--\>* Does appear to fall within simulation range - Present: 580.49 *--\>* Does appear to fall within simulation range DIA: - 2023: 376.87 *--\>* Does appear to fall within simulation range - Present: 419.33 *--\>* Does appear to fall within simulation range QQQ: - 2023: 409.52 *--\>* Does appear to fall within simulation range - Present: 507.19 *--\>* Does appear to fall within simulation range
+
+## Problem 2
+
+### A)
+
+```{r Predict-90-Function}
+predict_90 <- function(mean_vol_row) {
+  n.replicates = 1e5 #number of replicates
+  below = rep(0, n.replicates) #set up an array to store the results
+  
+  set.seed(100)
+  
+  duration = 90 #90 trading days for pts a,b 
+  mean.logreturn =  mean_vol_row$Mean #mean logreturn of SPY
+  volatility.logreturn =  mean_vol_row$Volatility #volatility of SPY
+  
+  for(i in 1:n.replicates) {
+    r = rnorm(duration, mean = mean.logreturn, 
+              sd = volatility.logreturn) #generate random nums according to SPY log returns
+    logPrice = log(1e10) + cumsum(r)
+    minlogP = min(logPrice) # minimum price over next 90 days
+    below[i] = as.numeric(minlogP < log(9500000000))
+  }
+  mean(below)
+}
+```
+
+```{r 90-day-Predict-SPY}
+spy_pred_90 <- data.frame()
+
+for(i in 1:nrow(etf_summary_daily$SPY)) {
+  new_row <- data.frame(Period = etf_summary_daily$SPY[i,1],
+                        Mean = predict_90(etf_summary_daily$SPY[i, ]))
+  spy_pred_90 <- rbind(spy_pred_90, new_row)
+}
+
+spy_pred_90
+```
+
+I found that 35.1% of the simulations based on the 2015-2019 SPY data would fall below the 9.5 billion mark, 65% for the 2020-2022 SPY data, and 19.4% for the 2023-Jan 10, 2025 data.
+
+### B)
+
+```{r 90-day-Predict-DIA}
+dia_pred_90 <- data.frame()
+
+for(i in 1:nrow(etf_summary_daily$DIA)) {
+  new_row <- data.frame(Period = etf_summary_daily$DIA[i,1],
+                        Mean = predict_90(etf_summary_daily$DIA[i, ]))
+  dia_pred_90 <- rbind(dia_pred_90, new_row)
+}
+
+dia_pred_90
+```
+
+I found that 34.8% of the simulations based on the 2015-2019 DIA data would fall below the 9.5 billion mark, 65.5% for the 2020-2022 DIA data, and 23.3% for the 2023-Jan 10, 2025 DIA data.
+
+```{r 90-day-Predict-QQQ}
+qqq_pred_90 <- data.frame()
+
+for(i in 1:nrow(etf_summary_daily$QQQ)) {
+  new_row <- data.frame(Period = etf_summary_daily$QQQ[i,1],
+                        Mean = predict_90(etf_summary_daily$QQQ[i, ]))
+  qqq_pred_90 <- rbind(qqq_pred_90, new_row)
+}
+
+qqq_pred_90
+```
+
+I found that 41.1% of the simulations based on the 2015-2019 QQQ data would fall below the 9.5 billion mark, 68.9% for the 2020-2022 QQQ data, and 27.7% for the 2023-Jan 10, 2025 QQQ data.
+
+### C)
+
+##### SPY:
+
+-   15 Days:
+
+    -   2015-2019: 6.6%
+
+    -   2020-2022: 31%
+
+    -   2023-Jan. 10, 2025: 3.7%
+
+-   126
+
+    -   2015-2019: 39.9%
+
+    -   2020-2022: 69.4\$
+
+    -   2023-Jan. 10, 2025: 21.5%
+
+##### DIA
+
+-   15 Days:
+
+    -   2015-2019: 6.6%
+
+    -   2020-2022: 31.2%
+
+    -   2023-Jan. 10, 2025: 2.8%
+
+-   126 Days:
+
+    -   2015-2019: 39.6%
+
+    -   2020-2022: 70%
+
+    -   2023-Jan. 10, 2025: 27%
+
+##### QQQ
+
+-   15 Days:
+
+    -   2015-2019: 12.8%
+
+    -   2020-2022: 37.4%
+
+    -   2023-Jan. 10, 2025: 10%
+
+-   126 Days:
+
+    -   2015-2019: 45.1%
+
+    -   2020-2022: 72.7%
+
+    -   2023-Jan. 10, 2025: 29.4%
+
+There appears to be a direct relationship with the proportion of simulations that indicate the hedge fund falling below 9.5 billion threshold and trading duration in the simulaiton. In essense, a longer trading duration introduces more variabliity therefore leading to a higher likelihood that a simulation would fall under that threshold.
+
+### D)
+
+```{r QQ-Plots-ETFs}
+qqnorm(daily_log_ret$SPY, main = "QQ Plot of SPY's Daily Log Returns")
+qqline(daily_log_ret$SPY, col = "red")
+
+qqnorm(daily_log_ret$DIA, main = "QQ Plot of DIA's Daily Log Returns")
+qqline(daily_log_ret$DIA, col = "red")
+
+qqnorm(daily_log_ret$QQQ, main = "QQ Plot of QQQ's Daily Log Returns")
+qqline(daily_log_ret$QQQ, col = "red")
+```
+
+Because none of the three etfs daily log returns appear to be normally distributed, we must conclude that the Sharpe Ratio may not be the best measure of risk-adjusted performance and that alternatives should be utilized. Because the sharpe ratio assumes normality in returns, seeing heightened skewness on either side of the normality curve implies that the true risk-adjusted performance of these etfs may be even *more* volatile.
+
+## Problem 3
+
+```{r Risk-Free-Asset_Periodized}
+risk_free <- read.table(paste(file.path(getwd(), "HW 1 Files/10-year-treasury-bond-rate-yield-chart.csv")), sep = ",", skip = 1, header = TRUE) #direction
+risk_free <- na.omit(risk_free)
+risk_free$date <- as.Date(risk_free$date, "%m/%d/%y")
+risk_free_log <- diff(log(risk_free$value), lag = 1)
+names(risk_free_log) <- risk_free$date[-1]
+
+split_rf_returns <- function(returns_vector) {
+  # Convert index to Date objects if they aren't already
+  dates <- names(returns_vector)
+  
+  # Define period breaks
+  period1_end <- as.Date("2019-12-31")
+  period2_end <- as.Date("2022-12-31")
+  
+  # Split the vector
+  period1 <- returns_vector[dates <= period1_end]
+  period2 <- returns_vector[dates > period1_end & dates <= period2_end]
+  period3 <- returns_vector[dates > period2_end]
+  
+  # Return as a list
+  return(list(
+    "2015-2019" = period1,
+    "2020-2022" = period2,
+    "2023-present" = period3
+  ))
+}
+
+rf_ret_periods <- split_rf_returns(risk_free_log)
+```
+
+```{r Sharpe-Ratio-Function}
+sharpe_ratio <- function(returns, rf_rate) {
+  
+  excess_returns <- returns - rf_rate
+  mean_excess <- mean(excess_returns, na.rm = TRUE)
+  std_excess <- sd(excess_returns, na.rm = TRUE)
+  
+  # Annualizing
+  sharpe <- (mean_excess * 252) / (std_excess * sqrt(252))
+  return(sharpe)
+}
+```
+
+```{r Sharpe-Ratio-Periodized}
+# Compute Sharpe ratio for each period
+sharpe_results_port <- sapply(seq_along(port_log_ret_periods), function(i) {
+  sharpe_ratio(port_log_ret_periods[[i]], rf_ret_periods[[i]])
+})
+
+# Name the results with corresponding timeframes
+names(sharpe_results_port) <- names(port_log_ret_periods)
+
+# Print results
+print(data.frame(sharpe_results_port))
+
+sharpe_results_etf <- lapply(etf_log_ret_periods, function(etf) {
+  sapply(seq_along(etf), function(i) {
+    sharpe_ratio(etf[[i]], rf_ret_periods[[i]])
+  })
+})
+
+# Name results with corresponding timeframes
+for (etf in names(sharpe_results_etf)) {
+  names(sharpe_results_etf[[etf]]) <- names(etf_log_ret_periods[[etf]])
+}
+
+# Print results
+print(data.frame(sharpe_results_etf))
+```
+
+Aside from the 2020-2022 period where every security type under performed against the risk free asset, the portfolio of 9 individual stocks outperformed every etf. Although gains from every security were modest, the gains made from the portfolio were the largest.
