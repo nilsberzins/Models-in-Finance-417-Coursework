@@ -1,0 +1,712 @@
+---
+title: "Homework 2"
+format: pdf
+editor: visual
+---
+
+```{r HW1_files}
+#| warning: false
+library(tidyverse)
+folder_path <- paste(file.path(getwd(), "HW 1 Files"))
+
+all_files <- list.files(folder_path)
+
+filtered_files <- all_files[!grepl("-", all_files)]
+filtered_files <- all_files[-1]
+
+filtered_files
+
+datasets <- lapply(filtered_files, function(x) {
+  curr_data <- read.table(paste0(folder_path, "/", x), sep=",", h = 1)
+  curr_data$Date <- as.Date(curr_data$Date, "%m/%d/%Y")
+  curr_data <- curr_data[order(curr_data$Date),]
+  curr_data$Close.Last <- as.numeric(gsub("\\$", "", curr_data$Close.Last))
+  price <- curr_data$Close.Last
+  names(price) <- curr_data$Date
+  return(price)
+})
+
+file_names <- gsub("\\.csv$", "", filtered_files)
+names(datasets) <- file_names
+```
+
+```{r HW2_files}
+
+folder_path <- paste(file.path(getwd(), "HW 2 Files"))
+
+all_files <- list.files(folder_path)
+
+filtered_files <- all_files[!grepl("-", all_files)]
+filtered_files <- all_files[-1]
+
+filtered_files
+
+datasets2 <- lapply(filtered_files, function(x) {
+  curr_data <- read.table(paste0(folder_path, "/", x), sep=",", h = 1)
+  curr_data$Date <- as.Date(curr_data$Date, "%m/%d/%Y")
+  curr_data <- curr_data[order(curr_data$Date),]
+  curr_data$Close.Last <- as.numeric(gsub("\\$", "", curr_data$Close.Last))
+  price <- curr_data$Close.Last
+  names(price) <- curr_data$Date
+  return(price)
+})
+
+file_names <- gsub("\\.csv$", "", filtered_files)
+names(datasets2) <- file_names
+```
+
+## Problem 1
+
+### A)
+
+```{r Yearly_Returns_ACCURATE}
+#| warning: false
+
+# Compute daily returns correctly
+daily_ret <- lapply(datasets, function(x) {
+  return(diff(x) / head(x, -1))  # Compute daily percentage returns
+})
+
+# Compute yearly returns while keeping years in list format
+yearly_ret <- lapply(daily_ret, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+mutated_df <- df |>
+    mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+    group_by(Year) |>
+    summarize(AverageRet = mean(Ret, na.rm = TRUE), .groups = "drop") |>
+    filter(as.numeric(Year) >= 2020) |> 
+    mutate(AverageRet = ifelse(as.numeric(Year) <= 2024, AverageRet * 252, 
+                              AverageRet * 10))
+  
+  
+  
+  # Return named numeric vector (years as names)
+  return(setNames(mutated_df$AverageRet, mutated_df$Year))
+})
+
+```
+
+```{r Port_Get_Yearly_Returns_OLD}
+# #| warning: false
+# 
+# # Yearly Returns using Average Yearly Price
+# yearly_ret <- lapply(daily_ret, function(x) {
+#   
+#   df <- data.frame(Date = as.Date(names(x)), Price = x)
+#   
+#   mutated_df <- df |>
+#     mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+#     group_by(Year) |>
+#     summarize(AveragePrice = mean(Price, na.rm = TRUE), .groups = "drop")
+#   
+#   # Compute yearly returns using average prices
+#   yearly_prices <- mutated_df$AveragePrice
+#   names(yearly_prices) <- mutated_df$Year
+#   yearly_diff <- diff(yearly_prices, lag = 1) / lag(yearly_prices, 1) 
+#   yearly_diff <- na.omit(yearly_diff)
+#   
+#   # Filter for years >= 2020
+#   valid_years <- as.numeric(names(yearly_diff)) >= 2020
+#   return(yearly_diff[valid_years])
+# })
+
+```
+
+```{r Port_Yearly_Split}
+
+yearly_22 <- lapply(yearly_ret, function(x){
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+
+yearly_pres <- lapply(yearly_ret, function(x) {
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+```{r RF_Yearly_Split}
+# Load risk-free rate data
+risk_free <- read.table(paste(file.path(getwd(), "HW 1 Files/10-year-treasury-bond-rate-yield-chart.csv")), sep = ",", skip = 1, header = TRUE)
+risk_free <- na.omit(risk_free)
+
+# Convert date and extract year
+risk_free <- risk_free |>
+  mutate(Date = as.Date(date, format = "%m/%d/%y")) |>
+  mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+  select(Year, value)
+
+# Compute average risk-free rate per year instead of using last value
+rf_22 <- risk_free |>
+  filter(Year >= 2020 & Year <= 2022) |>
+  group_by(Year) |>
+  summarize(value = mean(value, na.rm = TRUE) / 100, .groups = "drop")  # Use mean instead of last
+
+rf_pres <- risk_free |>
+  filter(Year >= 2023) |>
+  group_by(Year) |>
+  summarize(value = mean(value, na.rm = TRUE) / 100, .groups = "drop")  # Use mean instead of last
+
+```
+
+```{r Setting_up_Data}
+df_22 <- as.matrix(as.data.frame(yearly_22) |>
+                     select(-c(QQQ, SPY, DIA)))
+df_pres <- as.matrix(as.data.frame(yearly_pres) |>
+                     select(-c(QQQ, SPY, DIA)))
+
+mean_22 <- colMeans(df_22)
+mean_pres <- colMeans(df_pres)
+
+cov_mat_22 <- cov(df_22)
+cov_mat_pres <- cov(df_pres)
+
+sd_22 <- sqrt(diag(cov_mat_22))
+sd_pres <- sqrt(diag(cov_mat_pres))
+```
+
+#### Portfolios for 2020-2022
+
+```{r}
+library(quadprog)
+library(pracma)
+```
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_22)), mean_22, 
+             diag(1, nrow = length(mean_22))) # set the constraints matrix
+muP = c(0.05, 0.075, 0.10, 0.125, 0.15)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights = matrix(0, nrow = length(muP), ncol = length(mean_22)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_22))) # constraint vector
+  epsilon = 1e-4
+  Dmat = 2 * (cov_mat_22 + epsilon * diag(length(mean_22)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_22)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights[i,] = result$solution
+}
+
+colnames(weights) <- names(mean_22)
+
+df_temp <- as.data.frame(weights)
+
+rownames(df_temp) <- muP
+
+df_temp[abs(df_temp) < 1e-10] <- 0
+
+df_temp
+```
+
+```{r}
+#pdf("portfolio_construction.pdf", width = 6, height = 5)
+x_wiggle = diff(range(sdP)) * 0.1  # 10% extra space for x-axis
+y_wiggle = diff(range(muP)) * 0.1  # 10% extra space for y-axis
+
+plot(sdP, muP, type = "l",
+     xlim = range(sdP) + c(-x_wiggle, x_wiggle),
+     ylim = range(muP) + c(-y_wiggle, y_wiggle),
+     lty = 3)
+
+       # inefficient portfolios below the min var portfolio)
+        mufree = sapply(rf_22, mean)[[2]] # input value of risk-free interest rate
+        points(0, mufree, cex = 4, pch = "*") # show risk-free asset
+        sharpe = (muP - mufree) / sdP # compute Sharpe’s ratios
+        ind = (sharpe == max(sharpe)) # Find maximum Sharpe’s ratio
+        weights[ind, ] # print the weights of the tangency portfolio
+        lines(c(0, 2), mufree + c(0, 2) * (muP[ind] - mufree) / sdP[ind],
+              lwd = 2, lty = 1, col = "blue") # show line of optimal portfolios
+        points(sdP[ind], muP[ind], cex = 4, pch = "*") # tangency portfolio
+        
+        ind2 = (sdP == min(sdP)) # find minimum variance portfolio
+        points(sdP[ind2], muP[ind2], cex = 2, pch = "+",col = "green") # min var portfolio
+        
+        ind3 = (muP > muP[ind2])
+        lines(sdP[ind3], muP[ind3], type = "l", xlim = c(0, 0.1),
+              ylim = c(0, 0.2), lwd = 3, col = "red") # plot efficient frontier
+        
+data.frame(
+  muP = muP,
+  Sharpe = sharpe
+)
+```
+
+For the 2020-2022 period, the tangency portfolio was the 15% expected return portfolio with 1% in Cisco, 5% in Moderna, and 95% in Starbucks. The Sharpe Ratio was .54.
+
+The minimum variance portfolio appears to be the portfolio with 10% expected returns with 1% of our holdings in Cisco, 2% in Moderna, and 97% in Starbucks with a Sharpe Ratio of .42.
+
+#### Portfolios for 2023-Present
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_pres)), mean_pres, 
+             diag(1, nrow = length(mean_pres))) # set the constraints matrix
+muP = c(0.05, 0.075, 0.10, 0.125, 0.15)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights = matrix(0, nrow = length(muP), ncol = length(mean_pres)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_pres))) # constraint vector
+  epsilon = 1e-6
+  Dmat = 2 * (cov_mat_pres + epsilon * diag(length(mean_pres)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_pres)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights[i,] = result$solution
+}
+
+colnames(weights) <- names(mean_22)
+
+df_temp <- as.data.frame(weights)
+
+rownames(df_temp) <- muP
+
+df_temp[abs(df_temp) < 1e-10] <- 0
+
+df_temp
+```
+
+```{r}
+#pdf("portfolio_construction.pdf", width = 6, height = 5)
+x_wiggle = diff(range(sdP)) * 0.1  # 10% extra space for x-axis
+y_wiggle = diff(range(muP)) * 0.1  # 10% extra space for y-axis
+
+plot(sdP, muP, type = "l", 
+     xlim = range(sdP) + c(-x_wiggle, x_wiggle), 
+     ylim = range(muP) + c(-y_wiggle, y_wiggle),
+     lty = 3)
+
+
+       # inefficient portfolios below the min var portfolio)
+        mufree = sapply(rf_pres, mean)[[2]]  # input value of risk-free interest rate
+        points(0, mufree, cex = 4, pch = "*") # show risk-free asset
+        print(muP)
+        print(mufree)
+        print(sdP)
+        sharpe = (muP - mufree) / sdP # compute Sharpe’s ratios
+        ind = (sharpe == max(sharpe)) # Find maximum Sharpe’s ratio
+        weights[ind, ] # print the weights of the tangency portfolio
+        lines(c(0, 2), mufree + c(0, 2) * (muP[ind] - mufree) / sdP[ind],
+              lwd = 2, lty = 1, col = "blue") # show line of optimal portfolios
+        points(sdP[ind], muP[ind], cex = 4, pch = "*") # tangency portfolio
+        
+        ind2 = (sdP == min(sdP)) # find minimum variance portfolio
+        points(sdP[ind2], muP[ind2], cex = 2, pch = "+", col = "green") # min var portfolio
+        
+        ind3 = (muP > muP[ind2])
+        lines(sdP[ind3], muP[ind3], type = "l", xlim = c(0, 0.1),
+              ylim = c(0, 0.2), lwd = 3, col = "red") # plot efficient frontier
+        
+data.frame(
+  muP = muP,
+  Sharpe = sharpe
+)
+```
+
+For the 2023-Present period, the tangency portfolio was the 15% portfolio with 16% in Cisco, 22% in Meta, and 62% in Starbucks. The Sharpe Ratio was .92.
+
+The minimum variance portfolio appears to be the portfolio with 5% expected returns with 7% of its holdings in Amazon with the other 93% in Starbucks. The Sharpe Ratio of this portfolio is .29.
+
+### B)
+
+#### Portfolios for 2020-2022
+
+```{r}
+#| warning: false
+
+# Compute daily returns correctly
+daily_ret2 <- lapply(datasets2, function(x) {
+  return(diff(x) / head(x, -1))  # Compute daily percentage returns
+})
+
+# Compute yearly returns while keeping years in list format
+yearly_ret2 <- lapply(daily_ret2, function(x) {
+  df <- data.frame(Date = as.Date(names(x)), Ret = x)
+  
+  mutated_df <- df |>
+    mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+    group_by(Year) |>
+    summarize(AverageRet = mean(Ret, na.rm = TRUE), .groups = "drop") |>
+    filter(as.numeric(Year) >= 2020) |> 
+    mutate(AverageRet = ifelse(as.numeric(Year) <= 2024, AverageRet * 252, 
+                              AverageRet * 10))
+  
+  
+  
+  # Return named numeric vector (years as names)
+  return(setNames(mutated_df$AverageRet, mutated_df$Year))
+})
+
+yearly_ret_comb <- c(yearly_ret, yearly_ret2)
+```
+
+```{r}
+# #| warning: false
+# # Yearly Returns using Average Yearly Price
+# yearly_ret2 <- lapply(datasets2, function(x) {
+#   
+#   df <- data.frame(Date = as.Date(names(x)), Price = x)
+#   
+#   mutated_df <- df |>
+#     mutate(Year = format(floor_date(Date, "year"), "%Y")) |>
+#     group_by(Year) |>
+#     summarize(AveragePrice = mean(Price, na.rm = TRUE), .groups = "drop")
+#   
+#   # Compute yearly returns using average prices
+#   yearly_prices <- mutated_df$AveragePrice
+#   names(yearly_prices) <- mutated_df$Year
+#   yearly_diff <- diff(yearly_prices, lag = 1) / lag(yearly_prices, 1) 
+#   yearly_diff <- na.omit(yearly_diff)
+#   
+#   # Filter for years >= 2020
+#   valid_years <- as.numeric(names(yearly_diff)) >= 2020
+#   return(yearly_diff[valid_years])
+# })
+# 
+# yearly_ret_comb <- c(yearly_ret, yearly_ret2)
+```
+
+```{r}
+yearly_22<- lapply(yearly_ret_comb, function(x){
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2020 & year(date) <= 2022)
+  return(x[idx])
+})
+
+
+yearly_pres <- lapply(yearly_ret_comb, function(x) {
+  date <- as.Date(names(x), format = "%Y")
+  idx <- which(year(date) >= 2023)
+  return(x[idx])
+})
+```
+
+```{r}
+df_22 <- as.matrix(as.data.frame(yearly_22) |>
+                     select(-c(QQQ, SPY, DIA)))
+df_pres <- as.matrix(as.data.frame(yearly_pres) |>
+                     select(-c(QQQ, SPY, DIA)))
+
+mean_22 <- colMeans(df_22)
+mean_pres <- colMeans(df_pres)
+
+cov_mat_22 <- cov(df_22)
+cov_mat_pres <- cov(df_pres)
+
+sd_22 <- sqrt(diag(cov_mat_22))
+sd_pres <- sqrt(diag(cov_mat_pres))
+```
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_22)), mean_22, 
+             diag(1, nrow = length(mean_22))) # set the constraints matrix
+muP = c(0.05, 0.075, 0.10, 0.125, 0.15)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights = matrix(0, nrow = length(muP), ncol = length(mean_22)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_22))) # constraint vector
+  epsilon = 1e-4
+  Dmat = 2 * (cov_mat_22 + epsilon * diag(length(mean_22)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_22)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights[i,] = result$solution
+}
+
+colnames(weights) <- names(mean_22)
+
+df_temp <- as.data.frame(weights)
+
+rownames(df_temp) <- muP
+
+df_temp[abs(df_temp) < 1e-10] <- 0
+
+df_temp
+```
+
+```{r}
+#pdf("portfolio_construction.pdf", width = 6, height = 5)
+x_wiggle = diff(range(sdP)) * 0.1  # 10% extra space for x-axis
+y_wiggle = diff(range(muP)) * 0.1  # 10% extra space for y-axis
+
+plot(sdP, muP, type = "l",
+     xlim = range(sdP) + c(-x_wiggle, x_wiggle),
+     ylim = range(muP) + c(-y_wiggle, y_wiggle),
+     lty = 3)
+
+       # inefficient portfolios below the min var portfolio)
+        mufree = sapply(rf_22, mean)[[2]]  # input value of risk-free interest rate
+        points(0, mufree, cex = 4, pch = "*") # show risk-free asset
+        sharpe = (muP - mufree) / sdP # compute Sharpe’s ratios
+        ind = (sharpe == max(sharpe)) # Find maximum Sharpe’s ratio
+        weights[ind, ] # print the weights of the tangency portfolio
+        lines(c(0, 2), mufree + c(0, 2) * (muP[ind] - mufree) / sdP[ind],
+              lwd = 2, lty = 1, col = "blue") # show line of optimal portfolios
+        points(sdP[ind], muP[ind], cex = 4, pch = "*") # tangency portfolio
+        
+        ind2 = (sdP == min(sdP)) # find minimum variance portfolio
+        points(sdP[ind2], muP[ind2], cex = 2, pch = "+",col = "green") # min var portfolio
+        
+        ind3 = (muP > muP[ind2])
+        lines(sdP[ind3], muP[ind3], type = "l", xlim = c(0, 0.1),
+              ylim = c(0, 0.2), lwd = 3, col = "red") # plot efficient frontier
+        
+data.frame(
+  muP = muP,
+  Sharpe = sharpe
+)
+```
+
+For the 2020-2022 period, the tangency portfolio was the 15% expected return portfolio that had 46% in Starbucks, 50% in Goldman, and 4% in Wells Fargo. The Sharpe Ratio was .66.
+
+The minimum variance portfolio appears to be the portfolio with 5% expected returns with 63% of its holdings in Starbucks, 21% in Citigroup, and 16% in Wells Fargo. The Sharpe Ratio of this portfolio is .21.
+
+In the 2020-2022 period, there appears to be no emphasis placed on technology stocks when the financial services and bank stocks are included in the data set.
+
+#### Portfolios for 2023-Present
+
+```{r}
+# constraints for the quadratic problem of portfolio construction
+Amat = cbind(rep(1, length(mean_pres)), mean_pres, 
+             diag(1, nrow = length(mean_pres))) # set the constraints matrix
+muP = c(0.05, 0.075, 0.10, 0.125, 0.15)  # Target expected returns
+```
+
+```{r}
+# for the expect portfolio return
+sdP = muP # set up storage for std dev’s of portfolio returns
+weights = matrix(0, nrow = length(muP), ncol = length(mean_pres)) # storage for weights
+for (i in 1:length(muP)) # find the optimal portfolios
+   {
+  bvec = c(1, muP[i], rep(0, length(mean_pres))) # constraint vector
+  epsilon = 1e-6
+  Dmat = 2 * (cov_mat_pres + epsilon * diag(length(mean_pres)))
+  result = solve.QP(Dmat = Dmat, dvec = rep(0, length(mean_pres)),
+                    Amat = Amat, bvec = bvec, meq = 2)
+    sdP[i] = sqrt(result$value)
+    weights[i,] = result$solution
+}
+
+colnames(weights) <- names(mean_22)
+
+df_temp <- as.data.frame(weights)
+
+rownames(df_temp) <- muP
+
+df_temp[abs(df_temp) < 1e-10] <- 0
+
+df_temp
+```
+
+```{r}
+#pdf("portfolio_construction.pdf", width = 6, height = 5)
+x_wiggle = diff(range(sdP)) * 0.1  # 10% extra space for x-axis
+y_wiggle = diff(range(muP)) * 0.1  # 10% extra space for y-axis
+
+plot(sdP, muP, type = "l", 
+     xlim = range(sdP) + c(-x_wiggle, x_wiggle), 
+     ylim = range(muP) + c(-y_wiggle, y_wiggle),
+     lty = 3)
+
+
+       # inefficient portfolios below the min var portfolio)
+        mufree = sapply(rf_pres, mean)[[2]] # input value of risk-free interest rate
+        points(0, mufree, cex = 4, pch = "*") # show risk-free asset
+        sharpe = (muP - mufree) / sdP # compute Sharpe’s ratios
+        ind = (sharpe == max(sharpe)) # Find maximum Sharpe’s ratio
+        weights[ind, ] # print the weights of the tangency portfolio
+        lines(c(0, 2), mufree + c(0, 2) * (muP[ind] - mufree) / sdP[ind],
+              lwd = 2, lty = 1, col = "blue") # show line of optimal portfolios
+        points(sdP[ind], muP[ind], cex = 4, pch = "*") # tangency portfolio
+        
+        ind2 = (sdP == min(sdP)) # find minimum variance portfolio
+        points(sdP[ind2], muP[ind2], cex = 2, pch = "+", col = "green") # min var portfolio
+        
+        ind3 = (muP > muP[ind2])
+        lines(sdP[ind3], muP[ind3], type = "l", xlim = c(0, 0.1),
+              ylim = c(0, 0.2), lwd = 3, col = "red") # plot efficient frontier
+        
+data.frame(
+  muP = muP,
+  Sharpe = sharpe
+)
+```
+
+For the 2022-Present period, the tangency portfolio was the 5% return portfolio with 2% in Cisco, 9% in Meta, 2% in Microsoft, 28% in Moderna, 10% in Starbucks, 7% in BofA, 14% in Citigroup, and 10% in Goldman. The Sharpe Ratio was 19.12
+
+The minimum variance portfolio appears to be the portfolio with 5% with a large Sharpe Ratio of 19.12.
+
+In the 2022-Present period, there appears to be a redistribution of portfolio holdings on select tech firms as opposed to being dominated by Starbucks and the financial services sector.
+
+## Problem 2
+
+### A)
+
+```{r}
+daily_ret <- lapply(datasets, function(x){
+  
+  bench_date <- as.Date("2020-01-01", format = "%Y-%m-%d")
+  dates <- as.Date(names(x))
+  
+  x_filtered <- x[dates >= bench_date]
+  
+  return(diff(x_filtered) / head(x_filtered, -1))
+})
+
+# spy_ret <- daily_ret$SPY
+
+risk_free <- read.table(paste(file.path(getwd(), "HW 1 Files/10-year-treasury-bond-rate-yield-chart.csv")), sep = ",", skip = 1, header = TRUE)
+risk_free <- na.omit(risk_free)
+
+risk_free$value <- risk_free$value / 100
+
+bench_date <- as.Date("1/1/2020", format = "%m/%d/%y")
+
+risk_free <- as.data.frame(risk_free) |>
+  mutate(Date = as.Date(date, format = "%m/%d/%y"),
+         daily_rf = value / 252) |>
+  filter(Date >= bench_date)
+```
+
+```{r Calc_Excess_Returns}
+excess_ret <- lapply(daily_ret, function(x) {
+  
+  stock_df <- data.frame(Date = as.Date(names(x)), 
+                         StockRet = x)
+  
+  merged_df <- inner_join(stock_df, risk_free, by = "Date") |>
+    mutate(excess_stock = StockRet - daily_rf)
+
+  return(merged_df)  
+})
+```
+
+```{r}
+library(broom)
+
+spy_excess_df <- excess_ret$SPY |> 
+  select(Date, excess_stock) |>
+  rename(spy_excess = excess_stock)
+
+remove <- c("QQQ", "DIA", "SPY")
+
+excess_ret <- excess_ret[setdiff(names(excess_ret), remove)]
+
+run_regression <- function(stock_df) {
+  
+  merged_df <- inner_join(stock_df, spy_excess_df, by = "Date")
+  
+  model <- lm(excess_stock ~ spy_excess, data = merged_df)
+  
+  return(tidy(model))
+}
+
+regression_results <- lapply(excess_ret, run_regression)
+```
+
+```{r}
+# Define the stock names
+stock_names <- c("Amazon", "Apple", "Cisco", "Meta", "Microsoft", 
+                 "Moderna", "Netflix", "Starbucks", "Tesla")
+
+# Iterate through regression results and print formatted output
+lapply(stock_names, function(stock) {
+  # Extract regression summary for the stock
+  regression_summary <- regression_results[[stock]]
+  
+  # Extract Intercept (alpha) and Slope (beta)
+  intercept_row <- regression_summary %>% filter(term == "(Intercept)")
+  slope_row <- regression_summary %>% filter(term == "spy_excess")  # Assuming predictor name is "spy_excess"
+
+  # Print formatted output
+  cat("\nStock:", stock, "\n")
+  cat("Intercept:", intercept_row$estimate, ", P-value:", intercept_row$p.value, "\n")
+  cat("Slope:", slope_row$estimate, ", P-value:", slope_row$p.value, "\n")
+  cat("--------------------------------\n")
+})
+```
+
+All betas are statistically significant. Mispricing only appears in Tesla stock at the .05 alpha level.
+
+### B)
+
+```{r}
+excess_ret <- lapply(daily_ret, function(x) {
+  
+  stock_df <- data.frame(Date = as.Date(names(x)), 
+                         StockRet = x)
+  
+  merged_df <- inner_join(stock_df, risk_free, by = "Date") |>
+    mutate(excess_stock = StockRet - daily_rf)
+
+  return(merged_df)  
+})
+```
+
+```{r}
+library(broom)
+
+qqq_excess_df <- excess_ret$QQQ |> 
+  select(Date, excess_stock) |>
+  rename(qqq_excess = excess_stock)
+
+remove <- c("QQQ", "DIA", "SPY")
+
+excess_ret <- excess_ret[setdiff(names(excess_ret), remove)]
+
+run_regression <- function(stock_df) {
+  
+  merged_df <- inner_join(stock_df, qqq_excess_df, by = "Date")
+  
+  model <- lm(excess_stock ~ qqq_excess, data = merged_df)
+  
+  return(tidy(model))
+}
+
+regression_results <- lapply(excess_ret, run_regression)
+```
+
+```{r}
+# Define the stock names
+stock_names <- c("Amazon", "Apple", "Cisco", "Meta", "Microsoft", 
+                 "Moderna", "Netflix", "Starbucks", "Tesla")
+
+# Iterate through regression results and print formatted output
+lapply(stock_names, function(stock) {
+  # Extract regression summary for the stock
+  regression_summary <- regression_results[[stock]]
+  
+  # Extract Intercept (alpha) and Slope (beta)
+  intercept_row <- regression_summary %>% filter(term == "(Intercept)")
+  slope_row <- regression_summary %>% filter(term == "qqq_excess")  # Assuming predictor name is "qqq_excess"
+
+  # Print formatted output
+  cat("\nStock:", stock, "\n")
+  cat("Intercept:", intercept_row$estimate, ", P-value:", intercept_row$p.value, "\n")
+  cat("Slope:", slope_row$estimate, ", P-value:", slope_row$p.value, "\n")
+  cat("--------------------------------\n")
+})
+```
+
+All betas are statistically significant. Mispricing only appears in Tesla stock at the .1 alpha level. No significant differences from the analysis in A).
